@@ -39,14 +39,14 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # - name: Build and Push Docker Image
-      #   env:
-      #     ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      #     ECR_REPOSITORY: "hr_pr_review_exercise"
-      #     IMAGE_TAG: latest
-      #   run: |
-      #     docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f app/Dockerfile app
-      #     docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      - name: Build and Push Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: "hr_pr_review_exercise"
+          IMAGE_TAG: latest
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f app/Dockerfile app
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
       
       - name: 'Get EC2 instance data'
         id: instance_data
@@ -87,7 +87,7 @@ jobs:
             docker pull ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest
             docker stop $(docker ps -a -q)
             docker rm $(docker ps -a -q)
-            docker run -e "SECRET_KEY_BASE=${{ secrets.RAILS_SECRET_KEY_BASE }}" -p 80:3000 ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest 
+            docker run -e "SECRET_KEY_BASE=${{ secrets.RAILS_SECRET_KEY_BASE }}" -p -d 80:3000 ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest 
           EOF
           
         
