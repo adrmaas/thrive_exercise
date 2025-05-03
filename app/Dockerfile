@@ -24,7 +24,7 @@ ENV RAILS_ENV="production" \
     BUNDLE_DEPLOYMENT="1" \
     BUNDLE_PATH="/usr/local/bundle" \
     BUNDLE_WITHOUT="development" \
-    DOCKER_CACHE_BUSTER=3
+    DOCKER_CACHE_BUSTER=3 
 
 # Throw-away build stage to reduce size of final image
 FROM base AS build

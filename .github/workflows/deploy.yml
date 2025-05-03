@@ -4,7 +4,7 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - main
+      - master
 
 jobs:
   build-and-deploy:
@@ -29,8 +29,6 @@ jobs:
         id: terraform_plan_apply
         env:
           TF_VAR_security_group_id: ${{ secrets.SECURITY_GROUP_ID }}
-          TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |-
           cd infrastructure
           terraform init
@@ -49,4 +47,47 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f app/Dockerfile app
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      
+      - name: 'Get EC2 instance data'
+        id: instance_data
+        run: |-
+          aws ec2 describe-instances --filters 'Name=tag:Name,Values=pr_review_exercise' > instances.json
+
+          running_instance=$(cat instances.json | jq -r 'try (.Reservations[] | select(.Instances[].State.Name=="running")) // ""')
+
+          public_url=$(cat instances.json | jq -r '.Reservations[] | select(.Instances[].State.Name=="running") | .Instances[0] | .PublicDnsName' )
+          instance_id=$(cat instances.json | jq -r '.Reservations[] | select(.Instances[].State.Name=="running") | .Instances[0] | .InstanceId' )
+          
+          now=$(date +%s)
+          aws ec2 create-tags --resources "$instance_id" --tags Key=last_update,Value="$now"
+
+          echo "EC2 instance URL: $public_url"
+          echo "ECR URL: ${{ steps.login-ecr.outputs.registry }}"
+
+          echo "public_url=$public_url" >> $GITHUB_OUTPUT
+          echo "public_key=$public_key" >> $GITHUB_OUTPUT
+      - name: Spin up docker
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          INSTANCE_HOSTNAME: ${{ steps.instance_data.outputs.public_url }}
+        run: |
+          echo "$SSH_KEY" > ssh_key.pem && chmod 600 ssh_key.pem
+
+          ssh -o StrictHostKeyChecking=no -i "ssh_key.pem" ubuntu@${INSTANCE_HOSTNAME} <<- 'EOF'
+            sudo apt update &&
+            docker --version &&
+
+            aws configure set aws_access_key_id "${{ secrets.AWS_ACCESS_KEY_ID }}" --profile default &&
+            aws configure set aws_secret_access_key "${{ secrets.AWS_SECRET_ACCESS_KEY }}" --profile default &&
+            aws configure set region "us-east-1" --profile default &&
+            aws configure set output "text" --profile default &&
+
+            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "${{ steps.login-ecr.outputs.registry }}" &&
+
+            docker pull ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest
+            docker stop $(docker ps -a -q)
+            docker rm $(docker ps -a -q)
+            docker run -e "SECRET_KEY_BASE=${{ secrets.RAILS_SECRET_KEY_BASE }}" -p -d 80:3000 ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest 
+          EOF
+          
         
