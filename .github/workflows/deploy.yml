@@ -72,12 +72,21 @@ jobs:
           SSH_KEY: ${{ secrets.SSH_KEY }}
           INSTANCE_HOSTNAME: ${{ steps.instance_data.outputs.public_url }}
         run: |
-          echo "ssh key: $SSH_KEY"
           echo "$SSH_KEY" > ssh_key.pem && chmod 600 ssh_key.pem
 
           ssh -o StrictHostKeyChecking=no -i "ssh_key.pem" ubuntu@${INSTANCE_HOSTNAME} <<- 'EOF'
             sudo apt update &&
-            docker --version 
+            docker --version &&
+
+            aws configure set aws_access_key_id "${{ secrets.AWS_ACCESS_KEY_ID }}" --profile default &&
+            aws configure set aws_secret_access_key "${{ secrets.AWS_SECRET_ACCESS_KEY }}" --profile default &&
+            aws configure set region "us-east-1" --profile default &&
+            aws configure set output "text" --profile default &&
+
+            aws_account_id=$(aws sts get-caller-identity --query "Account" --output text) &&
+            aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin "$aws_account_id.dkr.ecr.us-east-1.amazonaws.com" &&
+
+            docker pull hr_pr_review_exercise
           EOF
           
         
