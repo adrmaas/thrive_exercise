@@ -1,3 +1,21 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "5.86.1"
+    }
+  }
+}
+terraform {
+  backend "s3" {
+    encrypt        = true
+    bucket         = "hr-resume-review-exercise-terraform-state"
+    region         = "us-east-1"
+    key            = "terraform.tfstate"
+    use_lockfile   = true
+  }
+}
+
 provider "aws" {
   alias      = "us-east-1"
   region     = "us-east-1"
