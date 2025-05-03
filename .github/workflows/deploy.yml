@@ -47,4 +47,38 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f app/Dockerfile app
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+      
+      - name: 'Get EC2 instance data'
+        id: instance_data
+        run: |-
+          aws ec2 describe-instances --filters 'Name=tag:Name,Values=pr_review_exercise' > instances.json
+
+          running_instance=$(cat instances.json | jq -r 'try (.Reservations[] | select(.Instances[].State.Name=="running")) // ""')
+
+          public_url=$(cat instances.json | jq -r '.Reservations[] | select(.Instances[].State.Name=="running") | .Instances[0] | .PublicDnsName' )
+          public_key=$(cat instances.json | jq -r '.Reservations[] | select(.Instances[].State.Name=="running") | .Instances[0] | .KeyName' )
+          instance_id=$(cat instances.json | jq -r '.Reservations[] | select(.Instances[].State.Name=="running") | .Instances[0] | .InstanceId' )
+          
+          now=$(date +%s)
+          aws ec2 create-tags --resources "$instance_id" --tags Key=last_update,Value="$now"
+
+          echo "EC2 instance URL: $public_url"
+          echo "EC2 instance SSH key name: $public_key"
+          echo "ECR URL: ${{ steps.login-ecr.outputs.registry }}"
+
+          echo "public_url=$public_url" >> $GITHUB_OUTPUT
+          echo "public_key=$public_key" >> $GITHUB_OUTPUT
+
+      - name: Spin up docker
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          INSTANCE_HOSTNAME: ${{ steps.instance_data.outputs.public_url }}
+        run: |
+          echo "$SSH_KEY" > ssh_key && chmod 600 ssh_key
+
+          ssh -o StrictHostKeyChecking=no -i ssh_key ubuntu@${INSTANCE_HOSTNAME} <<- 'EOF'
+            sudo apt update &&
+            docker --version 
+          EOF
+          
         
