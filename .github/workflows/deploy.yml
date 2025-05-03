@@ -29,8 +29,6 @@ jobs:
         id: terraform_plan_apply
         env:
           TF_VAR_security_group_id: ${{ secrets.SECURITY_GROUP_ID }}
-          TF_VAR_aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          TF_VAR_aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |-
           cd infrastructure
           terraform init

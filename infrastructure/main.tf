@@ -11,18 +11,9 @@ terraform {
     encrypt        = true
     bucket         = "hr-resume-review-exercise-terraform-state"
     region         = "us-east-1"
-    key            = "terraform.tfstate"
+    key            = "terraform.json"
     use_lockfile   = true
-    access_key = var.aws_access_key
-    secret_key = var.aws_secret_key
   }
-}
-
-provider "aws" {
-  alias      = "us-east-1"
-  region     = "us-east-1"
-  access_key = var.aws_access_key
-  secret_key = var.aws_secret_key
 }
 
 data "aws_ami" "ubuntu" {
