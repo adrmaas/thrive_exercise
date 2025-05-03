@@ -1,0 +1,13 @@
+infrastructure/.terraform/*
+infrastructure/.terraform.lock.hcl
+infrastructure/terraform.tfstate.backup
+
+app/.bundle
+app/.env*
+app/log/*
+app/tmp/*
+app/tmp/pids/*
+app/storage/*
+app/tmp/storage/*
+app/public/assets
+app/config/master.key
