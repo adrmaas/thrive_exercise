@@ -1,4 +1,4 @@
-name: Build, Push & Deploy
+name: Build Push & Deploy
 
 on:
   workflow_dispatch: {}
@@ -20,7 +20,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: 'us-east-1'
 
-      - name: '[Terraform] Plan && Apply'
+      - name: 'Terraform Setup'
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
+
+      - name: 'Terraform Apply'
         id: terraform_plan_apply
         env:
           TF_VAR_security_group_id: ${{ secrets.SECURITY_GROUP_ID }}
