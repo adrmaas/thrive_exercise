@@ -85,7 +85,9 @@ jobs:
             aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "${{ steps.login-ecr.outputs.registry }}" &&
 
             docker pull ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest
-            docker run -e "SECRET_KEY_BASE=${{ secrets.RAILS_SECRET_KEY_BASE }}" -p 80:3000 -i -t ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest 
+            docker stop $(docker ps -a -q)
+            docker rm $(docker ps -a -q)
+            docker run -e "SECRET_KEY_BASE=${{ secrets.RAILS_SECRET_KEY_BASE }}" -p 80:3000 ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest 
           EOF
           
         
