@@ -87,7 +87,7 @@ jobs:
             docker pull ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest
             docker stop $(docker ps -a -q)
             docker rm $(docker ps -a -q)
-            docker run -e "SECRET_KEY_BASE=${{ secrets.RAILS_SECRET_KEY_BASE }}" -p -d 80:3000 ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest 
+            docker run -e "SECRET_KEY_BASE=${{ secrets.RAILS_SECRET_KEY_BASE }}" -p 80:3000 -d ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest 
           EOF
           
         
