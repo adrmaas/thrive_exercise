@@ -4,7 +4,7 @@ output "ecr_repository_url" {
 }
 
 output "instance_public_ip" {
-  description = "Public IP of app instance"
+  description = "Public IP of app instance (for reference; Kamal connects via instance ID)"
   value       = module.app_instance.public_ip
 }
 
