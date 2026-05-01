@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Creates and configures the S3 bucket for Terraform remote state.
+# Run once before `terraform init` in infrastructure/.
+# Usage: ./bootstrap.sh [region] [account-id] [aws-profile]
+
+set -euo pipefail
+
+REGION="${1:-us-west-2}"
+ACCOUNT_ID="${2:-071919116017}"
+AWS_PROFILE="${3:-admin}"
+BUCKET="thrive-exercise-tfstate-${ACCOUNT_ID}-${REGION}"
+
+export AWS_PROFILE
+
+echo "Creating state bucket: $BUCKET"
+
+# us-east-1 requires no LocationConstraint; all other regions do
+if [ "$REGION" = "us-east-1" ]; then
+  aws s3api create-bucket --bucket "$BUCKET" --region "$REGION"
+else
+  aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" \
+    --create-bucket-configuration LocationConstraint="$REGION"
+fi
+
+aws s3api put-bucket-versioning --bucket "$BUCKET" \
+  --versioning-configuration Status=Enabled
+
+aws s3api put-bucket-encryption --bucket "$BUCKET" \
+  --server-side-encryption-configuration '{
+    "Rules": [{
+      "ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}
+    }]
+  }'
+
+aws s3api put-public-access-block --bucket "$BUCKET" \
+  --public-access-block-configuration \
+    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
+
+echo "Done. Bucket: $BUCKET"
+echo ""
+echo "Run: cd infrastructure && terraform init"
