@@ -33,10 +33,15 @@ jobs:
         id: config
         run: |
           echo "ecr_url=$(aws ssm get-parameter --name /thrive-exercise/deploy/ECR_URL --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
-          echo "instance_ip=$(aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_IPS --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "instance_ip=$(aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_ID --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "secret_key_base=$(aws ssm get-parameter --name /thrive-exercise/SECRET_KEY_BASE --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "username=$(aws ssm get-parameter --name /thrive-exercise/USERNAME --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "password=$(aws ssm get-parameter --name /thrive-exercise/PASSWORD --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "ssh_private_key<<EOF" >> $GITHUB_OUTPUT
+          aws ssm get-parameter --name /thrive-exercise/SSH_PRIVATE_KEY --with-decryption --query Parameter.Value --output text >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
-        id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Docker Image
@@ -59,10 +64,16 @@ jobs:
         working-directory: app
         env:
           DEPLOY_HOSTS: ${{ steps.config.outputs.instance_ip }}
-          DEPLOY_IMAGE: ${{ steps.config.outputs.ecr_url }}
-          IMAGE_TAG: ${{ github.sha }}
-          KAMAL_REGISTRY_PASSWORD: ${{ steps.ecr-login.outputs.docker_password_071919116017_dkr_ecr_us_west_2_amazonaws_com }}
-        run: bundle exec kamal deploy
+          SECRET_KEY_BASE: ${{ steps.config.outputs.secret_key_base }}
+          USERNAME: ${{ steps.config.outputs.username }}
+          PASSWORD: ${{ steps.config.outputs.password }}
+        run: |
+          aws ssm get-parameter --name /thrive-exercise/SSH_PRIVATE_KEY \
+            --with-decryption --query Parameter.Value --output text \
+            --region us-west-2 > /tmp/thrive-deploy-key.pem
+          chmod 600 /tmp/thrive-deploy-key.pem
+          bundle exec kamal deploy
+          rm -f /tmp/thrive-deploy-key.pem
 
   ci:
     uses: ./.github/workflows/ci.yml

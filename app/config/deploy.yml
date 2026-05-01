@@ -1,22 +1,21 @@
 # Name of your application. Used to uniquely configure containers.
 service: thrive-exercise
 
-# Name of the container image (ECR URL and tag injected at deploy time).
-image: <%= ENV.fetch("DEPLOY_IMAGE", "071919116017.dkr.ecr.us-west-2.amazonaws.com/thrive-exercise") %>:<%= ENV.fetch("IMAGE_TAG", "latest") %>
+# Name of the container image. Registry server is prepended automatically from the registry config.
+image: thrive-exercise
 
 # Deploy to these servers.
 # In CI, DEPLOY_HOSTS is set from Terraform outputs via SSM.
 # Locally, falls back to fetching from SSM automatically (requires AWS auth).
 servers:
-  web: <%= (ENV["DEPLOY_HOSTS"] || `aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_IPS --query Parameter.Value --output text --region us-west-2 2>/dev/null`.strip).split(",") %>
+  web: <%= (ENV["DEPLOY_HOSTS"] || `aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_ID --query Parameter.Value --output text --region us-west-2 2>/dev/null`.strip).split(",") %>
 
 # Kamal proxy — no SSL since we're using EC2 public DNS directly.
 # For production, put Cloudflare or an ALB in front and re-enable ssl: true with a real hostname.
 proxy:
   ssl: false
-  host: <%= ENV.fetch("DEPLOY_HOST", "") %>
 
-# ECR registry — AWS credentials handled by IAM role on EC2; password is the ECR token.
+# ECR registry auth. KAMAL_REGISTRY_PASSWORD is set in .kamal/secrets via aws ecr get-login-password.
 registry:
   server: 071919116017.dkr.ecr.us-west-2.amazonaws.com
   username: AWS
@@ -35,7 +34,11 @@ env:
 # SSH via AWS SSM Session Manager — no open port 22 required.
 # Requires: AWS CLI + session-manager-plugin installed locally, AWS auth active.
 ssh:
-  proxy: "sh -c 'aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region us-west-2'"
+  user: ec2-user
+  keys_only: true
+  keys:
+    - /tmp/thrive-deploy-key.pem
+  proxy_command: "aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region us-west-2"
 
 # Asset bridging between deploys to avoid 404s on in-flight requests.
 asset_path: /rails/public/assets
