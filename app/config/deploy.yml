@@ -15,7 +15,7 @@ servers:
 proxy:
   ssl: false
 
-# ECR registry — AWS credentials handled by IAM role on EC2; password is the ECR token.
+# ECR registry auth. KAMAL_REGISTRY_PASSWORD is set in .kamal/secrets via aws ecr get-login-password.
 registry:
   server: 071919116017.dkr.ecr.us-west-2.amazonaws.com
   username: AWS

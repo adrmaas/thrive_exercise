@@ -37,10 +37,8 @@ jobs:
           echo "secret_key_base=$(aws ssm get-parameter --name /thrive-exercise/SECRET_KEY_BASE --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
           echo "username=$(aws ssm get-parameter --name /thrive-exercise/USERNAME --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
           echo "password=$(aws ssm get-parameter --name /thrive-exercise/PASSWORD --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
-          echo "kamal_registry_password=$(aws ecr get-login-password --region us-west-2)" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
-        id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Docker Image
@@ -65,7 +63,6 @@ jobs:
           DEPLOY_HOSTS: ${{ steps.config.outputs.instance_ip }}
           DEPLOY_IMAGE: ${{ steps.config.outputs.ecr_url }}
           IMAGE_TAG: ${{ github.sha }}
-          KAMAL_REGISTRY_PASSWORD: ${{ steps.config.outputs.kamal_registry_password }}
           SECRET_KEY_BASE: ${{ steps.config.outputs.secret_key_base }}
           USERNAME: ${{ steps.config.outputs.username }}
           PASSWORD: ${{ steps.config.outputs.password }}
