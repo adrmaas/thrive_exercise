@@ -39,14 +39,14 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'pull_request'
         working-directory: infrastructure
         env:
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: terraform plan
 
       - name: Terraform Apply
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         working-directory: infrastructure
         env:
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}

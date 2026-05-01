@@ -1,3 +1,20 @@
+# --- SSH Key Pair ---
+
+resource "tls_private_key" "ssh" {
+  algorithm = "ED25519"
+}
+
+resource "aws_key_pair" "app" {
+  key_name   = "${var.app_name}-key"
+  public_key = tls_private_key.ssh.public_key_openssh
+}
+
+resource "aws_ssm_parameter" "ssh_private_key" {
+  name  = "/${var.app_name}/SSH_PRIVATE_KEY"
+  type  = "SecureString"
+  value = tls_private_key.ssh.private_key_openssh
+}
+
 # --- ECR ---
 
 resource "aws_ecr_repository" "app" {
@@ -129,6 +146,7 @@ module "app_instance" {
   name                        = var.app_name
   ami                         = data.aws_ami.ecs_optimized.id
   instance_type               = "t2.micro"
+  key_name                    = aws_key_pair.app.key_name
   iam_instance_profile        = aws_iam_instance_profile.app.name
   vpc_security_group_ids      = [module.app_sg.security_group_id]
   subnet_id                   = module.vpc.public_subnets[0]

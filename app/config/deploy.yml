@@ -34,6 +34,10 @@ env:
 # SSH via AWS SSM Session Manager — no open port 22 required.
 # Requires: AWS CLI + session-manager-plugin installed locally, AWS auth active.
 ssh:
+  user: ec2-user
+  keys_only: true
+  key_data:
+    - SSH_PRIVATE_KEY
   proxy_command: "aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region us-west-2"
 
 # Asset bridging between deploys to avoid 404s on in-flight requests.
