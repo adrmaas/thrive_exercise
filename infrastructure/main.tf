@@ -300,8 +300,8 @@ resource "aws_ssm_parameter" "ecr_url" {
   value = aws_ecr_repository.app.repository_url
 }
 
-resource "aws_ssm_parameter" "instance_ip" {
-  name  = "/${var.app_name}/deploy/INSTANCE_IPS"
+resource "aws_ssm_parameter" "instance_id" {
+  name  = "/${var.app_name}/deploy/INSTANCE_ID"
   type  = "String"
-  value = module.app_instance.public_ip
+  value = module.app_instance.id
 }

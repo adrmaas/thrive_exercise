@@ -33,7 +33,7 @@ jobs:
         id: config
         run: |
           echo "ecr_url=$(aws ssm get-parameter --name /thrive-exercise/deploy/ECR_URL --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
-          echo "instance_ip=$(aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_IPS --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "instance_ip=$(aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_ID --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
           echo "secret_key_base=$(aws ssm get-parameter --name /thrive-exercise/SECRET_KEY_BASE --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
           echo "username=$(aws ssm get-parameter --name /thrive-exercise/USERNAME --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
           echo "password=$(aws ssm get-parameter --name /thrive-exercise/PASSWORD --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT

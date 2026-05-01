@@ -8,7 +8,7 @@ image: <%= ENV.fetch("DEPLOY_IMAGE", "071919116017.dkr.ecr.us-west-2.amazonaws.c
 # In CI, DEPLOY_HOSTS is set from Terraform outputs via SSM.
 # Locally, falls back to fetching from SSM automatically (requires AWS auth).
 servers:
-  web: <%= (ENV["DEPLOY_HOSTS"] || `aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_IPS --query Parameter.Value --output text --region us-west-2 2>/dev/null`.strip).split(",") %>
+  web: <%= (ENV["DEPLOY_HOSTS"] || `aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_ID --query Parameter.Value --output text --region us-west-2 2>/dev/null`.strip).split(",") %>
 
 # Kamal proxy — no SSL since we're using EC2 public DNS directly.
 # For production, put Cloudflare or an ALB in front and re-enable ssl: true with a real hostname.
@@ -34,7 +34,7 @@ env:
 # SSH via AWS SSM Session Manager — no open port 22 required.
 # Requires: AWS CLI + session-manager-plugin installed locally, AWS auth active.
 ssh:
-  proxy: "sh -c 'aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region us-west-2'"
+  proxy_command: "aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region us-west-2"
 
 # Asset bridging between deploys to avoid 404s on in-flight requests.
 asset_path: /rails/public/assets
