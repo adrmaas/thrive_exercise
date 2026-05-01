@@ -1,7 +1,8 @@
 # --- SSH Key Pair ---
 
 resource "tls_private_key" "ssh" {
-  algorithm = "ED25519"
+  algorithm = "RSA"
+  rsa_bits  = 4096
 }
 
 resource "aws_key_pair" "app" {
@@ -12,7 +13,7 @@ resource "aws_key_pair" "app" {
 resource "aws_ssm_parameter" "ssh_private_key" {
   name  = "/${var.app_name}/SSH_PRIVATE_KEY"
   type  = "SecureString"
-  value = tls_private_key.ssh.private_key_openssh
+  value = tls_private_key.ssh.private_key_pem
 }
 
 # --- ECR ---

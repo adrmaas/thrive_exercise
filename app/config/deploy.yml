@@ -1,8 +1,8 @@
 # Name of your application. Used to uniquely configure containers.
 service: thrive-exercise
 
-# Name of the container image (ECR URL and tag injected at deploy time).
-image: <%= ENV.fetch("DEPLOY_IMAGE", "071919116017.dkr.ecr.us-west-2.amazonaws.com/thrive-exercise") %>:<%= ENV.fetch("IMAGE_TAG", "latest") %>
+# Name of the container image. Registry server is prepended automatically from the registry config.
+image: thrive-exercise
 
 # Deploy to these servers.
 # In CI, DEPLOY_HOSTS is set from Terraform outputs via SSM.
@@ -36,8 +36,8 @@ env:
 ssh:
   user: ec2-user
   keys_only: true
-  key_data:
-    - SSH_PRIVATE_KEY
+  keys:
+    - /tmp/thrive-deploy-key.pem
   proxy_command: "aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region us-west-2"
 
 # Asset bridging between deploys to avoid 404s on in-flight requests.

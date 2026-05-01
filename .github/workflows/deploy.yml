@@ -64,13 +64,19 @@ jobs:
         working-directory: app
         env:
           DEPLOY_HOSTS: ${{ steps.config.outputs.instance_ip }}
-          DEPLOY_IMAGE: ${{ steps.config.outputs.ecr_url }}
-          IMAGE_TAG: ${{ github.sha }}
           SECRET_KEY_BASE: ${{ steps.config.outputs.secret_key_base }}
           USERNAME: ${{ steps.config.outputs.username }}
           PASSWORD: ${{ steps.config.outputs.password }}
-          SSH_PRIVATE_KEY: ${{ steps.config.outputs.ssh_private_key }}
-        run: bundle exec kamal deploy
+          SECRET_KEY_BASE: ${{ steps.config.outputs.secret_key_base }}
+          USERNAME: ${{ steps.config.outputs.username }}
+          PASSWORD: ${{ steps.config.outputs.password }}
+        run: |
+          aws ssm get-parameter --name /thrive-exercise/SSH_PRIVATE_KEY \
+            --with-decryption --query Parameter.Value --output text \
+            --region us-west-2 > /tmp/thrive-deploy-key.pem
+          chmod 600 /tmp/thrive-deploy-key.pem
+          bundle exec kamal deploy
+          rm -f /tmp/thrive-deploy-key.pem
 
   ci:
     uses: ./.github/workflows/ci.yml
