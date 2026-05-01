@@ -11,3 +11,6 @@ app/storage/*
 app/tmp/storage/*
 app/public/assets
 app/config/master.key
+
+.DS_Store
+**/.DS_Store

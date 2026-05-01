@@ -1,93 +1,68 @@
-name: Build Push & Deploy
+name: Deploy
 
 on:
   workflow_dispatch: {}
   push:
     branches:
       - master
+    paths:
+      - 'app/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    needs: [ci]
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: 'us-east-1'
+          aws-access-key-id: ${{ secrets.AWS_DEPLOY_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
 
-      - name: 'Terraform Setup'
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_wrapper: false
+      - name: Install SSM Session Manager plugin
+        run: |
+          curl -sSL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
 
-      - name: 'Terraform Apply'
-        id: terraform_plan_apply
-        env:
-          TF_VAR_security_group_id: ${{ secrets.SECURITY_GROUP_ID }}
-        run: |-
-          cd infrastructure
-          terraform init
-          terraform validate
-          terraform apply -auto-approve
+      - name: Read deploy config from SSM
+        id: config
+        run: |
+          echo "ecr_url=$(aws ssm get-parameter --name /thrive-exercise/deploy/ECR_URL --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "instance_ip=$(aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_IPS --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
-        id: login-ecr
+        id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build and Push Docker Image
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: "hr_pr_review_exercise"
-          IMAGE_TAG: latest
+          ECR_URL: ${{ steps.config.outputs.ecr_url }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f app/Dockerfile app
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-      
-      - name: 'Get EC2 instance data'
-        id: instance_data
-        run: |-
-          aws ec2 describe-instances --filters 'Name=tag:Name,Values=pr_review_exercise' > instances.json
+          docker build -t $ECR_URL:$IMAGE_TAG -t $ECR_URL:latest -f app/Dockerfile app
+          docker push $ECR_URL:$IMAGE_TAG
+          docker push $ECR_URL:latest
 
-          running_instance=$(cat instances.json | jq -r 'try (.Reservations[] | select(.Instances[].State.Name=="running")) // ""')
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+          working-directory: app
 
-          public_url=$(cat instances.json | jq -r '.Reservations[] | select(.Instances[].State.Name=="running") | .Instances[0] | .PublicDnsName' )
-          instance_id=$(cat instances.json | jq -r '.Reservations[] | select(.Instances[].State.Name=="running") | .Instances[0] | .InstanceId' )
-          
-          now=$(date +%s)
-          aws ec2 create-tags --resources "$instance_id" --tags Key=last_update,Value="$now"
-
-          echo "EC2 instance URL: $public_url"
-          echo "ECR URL: ${{ steps.login-ecr.outputs.registry }}"
-
-          echo "public_url=$public_url" >> $GITHUB_OUTPUT
-          echo "public_key=$public_key" >> $GITHUB_OUTPUT
-      - name: Spin up docker
+      - name: Deploy with Kamal
+        working-directory: app
         env:
-          SSH_KEY: ${{ secrets.SSH_KEY }}
-          INSTANCE_HOSTNAME: ${{ steps.instance_data.outputs.public_url }}
-        run: |
-          echo "$SSH_KEY" > ssh_key.pem && chmod 600 ssh_key.pem
+          DEPLOY_HOSTS: ${{ steps.config.outputs.instance_ip }}
+          DEPLOY_IMAGE: ${{ steps.config.outputs.ecr_url }}
+          IMAGE_TAG: ${{ github.sha }}
+          KAMAL_REGISTRY_PASSWORD: ${{ steps.ecr-login.outputs.docker_password_071919116017_dkr_ecr_us_west_2_amazonaws_com }}
+        run: bundle exec kamal deploy
 
-          ssh -o StrictHostKeyChecking=no -i "ssh_key.pem" ubuntu@${INSTANCE_HOSTNAME} <<- 'EOF'
-            sudo apt update &&
-            docker --version &&
-
-            aws configure set aws_access_key_id "${{ secrets.AWS_ACCESS_KEY_ID }}" --profile default &&
-            aws configure set aws_secret_access_key "${{ secrets.AWS_SECRET_ACCESS_KEY }}" --profile default &&
-            aws configure set region "us-east-1" --profile default &&
-            aws configure set output "text" --profile default &&
-
-            aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "${{ steps.login-ecr.outputs.registry }}" &&
-
-            docker pull ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest
-            docker stop $(docker ps -a -q)
-            docker rm $(docker ps -a -q)
-            docker run -e "SECRET_KEY_BASE=${{ secrets.RAILS_SECRET_KEY_BASE }}" -p 80:3000 -d ${{ steps.login-ecr.outputs.registry }}/hr_pr_review_exercise:latest 
-          EOF
-          
-        
+  ci:
+    uses: ./.github/workflows/ci.yml
