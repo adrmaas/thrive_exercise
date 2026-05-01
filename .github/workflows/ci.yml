@@ -26,7 +26,7 @@ jobs:
           working-directory: app
 
       - name: Scan for common Rails security vulnerabilities using static analysis
-        run: bin/brakeman --no-pager --no-exit-on-warn
+        run: bin/brakeman --no-pager
 
   scan_js:
     runs-on: ubuntu-latest
