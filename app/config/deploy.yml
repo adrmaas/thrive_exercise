@@ -14,7 +14,6 @@ servers:
 # For production, put Cloudflare or an ALB in front and re-enable ssl: true with a real hostname.
 proxy:
   ssl: false
-  host: <%= ENV.fetch("DEPLOY_HOST", "") %>
 
 # ECR registry — AWS credentials handled by IAM role on EC2; password is the ECR token.
 registry:

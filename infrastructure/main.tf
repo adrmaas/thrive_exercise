@@ -87,7 +87,7 @@ resource "aws_iam_role_policy" "ecr" {
   })
 }
 
-resource "aws_iam_role_policy" "ssm_params" {
+resource "aws_iam_role_policy" "ssm" {
   name = "ssm-read"
   role = aws_iam_role.app.id
   policy = jsonencode({
@@ -135,7 +135,7 @@ module "app_instance" {
   associate_public_ip_address = true
 
   root_block_device = [{
-    volume_size           = 20
+    volume_size           = 30
     volume_type           = "gp3"
     encrypted             = true
     delete_on_termination = true
