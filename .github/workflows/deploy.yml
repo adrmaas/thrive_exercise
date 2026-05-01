@@ -34,6 +34,9 @@ jobs:
         run: |
           echo "ecr_url=$(aws ssm get-parameter --name /thrive-exercise/deploy/ECR_URL --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
           echo "instance_ip=$(aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_IPS --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "secret_key_base=$(aws ssm get-parameter --name /thrive-exercise/SECRET_KEY_BASE --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "username=$(aws ssm get-parameter --name /thrive-exercise/USERNAME --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "password=$(aws ssm get-parameter --name /thrive-exercise/PASSWORD --with-decryption --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
         id: ecr-login
@@ -62,6 +65,9 @@ jobs:
           DEPLOY_IMAGE: ${{ steps.config.outputs.ecr_url }}
           IMAGE_TAG: ${{ github.sha }}
           KAMAL_REGISTRY_PASSWORD: ${{ steps.ecr-login.outputs.docker_password_071919116017_dkr_ecr_us_west_2_amazonaws_com }}
+          SECRET_KEY_BASE: ${{ steps.config.outputs.secret_key_base }}
+          USERNAME: ${{ steps.config.outputs.username }}
+          PASSWORD: ${{ steps.config.outputs.password }}
         run: bundle exec kamal deploy
 
   ci:

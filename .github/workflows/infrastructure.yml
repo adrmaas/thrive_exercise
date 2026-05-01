@@ -2,6 +2,9 @@ name: Infrastructure
 
 on:
   workflow_dispatch: {}
+  pull_request:
+    paths:
+      - 'infrastructure/**'
   push:
     branches:
       - master
@@ -35,7 +38,15 @@ jobs:
         working-directory: infrastructure
         run: terraform validate
 
+      - name: Terraform Plan
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+        working-directory: infrastructure
+        env:
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+        run: terraform plan
+
       - name: Terraform Apply
+        if: github.event_name == 'push'
         working-directory: infrastructure
         env:
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
