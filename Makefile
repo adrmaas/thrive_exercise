@@ -21,6 +21,11 @@ ci: scan lint test ## Run all CI checks locally
 plan: ## Run terraform plan (requires ALERT_EMAIL env var or prompts)
 	cd infrastructure && terraform plan -var="alert_email=$${ALERT_EMAIL:-adr@maas.ca}"
 
+url: ## Print the deployed app URL
+	@INSTANCE_ID=$$(AWS_PROFILE=admin aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_ID --query Parameter.Value --output text --region us-west-2) && \
+	DNS=$$(AWS_PROFILE=admin aws ec2 describe-instances --instance-ids $$INSTANCE_ID --query 'Reservations[0].Instances[0].PublicDnsName' --output text --region us-west-2) && \
+	echo "http://$$DNS"
+
 build: ## Build Docker image locally
 	docker build -t thrive-exercise:local -f app/Dockerfile app
 

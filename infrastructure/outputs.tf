@@ -3,6 +3,11 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.app.repository_url
 }
 
+output "app_url" {
+  description = "URL of the deployed application"
+  value       = "http://${module.app_instance.public_dns}"
+}
+
 output "instance_public_ip" {
   description = "Public IP of app instance (for reference; Kamal connects via instance ID)"
   value       = module.app_instance.public_ip
