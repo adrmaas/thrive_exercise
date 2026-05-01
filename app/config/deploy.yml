@@ -32,9 +32,10 @@ env:
   clear:
     RAILS_LOG_LEVEL: info
 
-# SSH user for EC2 Ubuntu instances.
+# SSH via AWS SSM Session Manager — no open port 22 required.
+# Requires: AWS CLI + session-manager-plugin installed locally, AWS auth active.
 ssh:
-  user: ubuntu
+  proxy: "sh -c 'aws ssm start-session --target %h --document-name AWS-StartSSHSession --parameters portNumber=%p --region us-west-2'"
 
 # Asset bridging between deploys to avoid 404s on in-flight requests.
 asset_path: /rails/public/assets

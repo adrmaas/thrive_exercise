@@ -3,14 +3,19 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.app.repository_url
 }
 
-output "instance_public_ips" {
-  description = "Public IPs of app instances (use in Kamal deploy config)"
-  value       = module.app_instance[*].public_ip
+output "instance_public_ip" {
+  description = "Public IP of app instance"
+  value       = module.app_instance.public_ip
 }
 
 output "instance_public_dns" {
-  description = "Public DNS names of app instances"
-  value       = module.app_instance[*].public_dns
+  description = "Public DNS of app instance"
+  value       = module.app_instance.public_dns
+}
+
+output "instance_id" {
+  description = "Instance ID (use for SSM Session Manager access)"
+  value       = module.app_instance.id
 }
 
 output "vpc_id" {

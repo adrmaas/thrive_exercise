@@ -24,11 +24,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_DEPLOY_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
 
+      - name: Install SSM Session Manager plugin
+        run: |
+          curl -sSL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
       - name: Read deploy config from SSM
         id: config
         run: |
           echo "ecr_url=$(aws ssm get-parameter --name /thrive-exercise/deploy/ECR_URL --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
-          echo "instance_ips=$(aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_IPS --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
+          echo "instance_ip=$(aws ssm get-parameter --name /thrive-exercise/deploy/INSTANCE_IPS --query Parameter.Value --output text)" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
         id: ecr-login
@@ -53,17 +58,11 @@ jobs:
       - name: Deploy with Kamal
         working-directory: app
         env:
-          DEPLOY_HOSTS: ${{ steps.config.outputs.instance_ips }}
+          DEPLOY_HOSTS: ${{ steps.config.outputs.instance_ip }}
           DEPLOY_IMAGE: ${{ steps.config.outputs.ecr_url }}
           IMAGE_TAG: ${{ github.sha }}
           KAMAL_REGISTRY_PASSWORD: ${{ steps.ecr-login.outputs.docker_password_071919116017_dkr_ecr_us_west_2_amazonaws_com }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          echo "$SSH_PRIVATE_KEY" > /tmp/deploy_key && chmod 600 /tmp/deploy_key
-          eval $(ssh-agent)
-          ssh-add /tmp/deploy_key
-          rm /tmp/deploy_key
-          bundle exec kamal deploy
+        run: bundle exec kamal deploy
 
   ci:
     uses: ./.github/workflows/ci.yml

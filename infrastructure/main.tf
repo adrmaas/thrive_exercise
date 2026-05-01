@@ -1,21 +1,3 @@
-resource "tls_private_key" "ssh" {
-  algorithm = "ED25519"
-}
-
-resource "aws_key_pair" "app" {
-  key_name   = "${var.app_name}-key"
-  public_key = tls_private_key.ssh.public_key_openssh
-}
-
-resource "aws_ssm_parameter" "ssh_private_key" {
-  name  = "/${var.app_name}/SSH_PRIVATE_KEY"
-  type  = "SecureString"
-  value = tls_private_key.ssh.private_key_openssh
-}
-
-
-
-
 # --- ECR ---
 
 resource "aws_ecr_repository" "app" {
@@ -48,17 +30,15 @@ resource "aws_ecr_lifecycle_policy" "app" {
   })
 }
 
-data "aws_ami" "ubuntu" {
+# --- AMI ---
+
+data "aws_ami" "ecs_optimized" {
   most_recent = true
+  owners      = ["amazon"]
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+    values = ["al2023-ami-ecs-hvm-*-x86_64"]
   }
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-  owners = ["099720109477"]
 }
 
 # --- IAM ---
@@ -79,6 +59,16 @@ resource "aws_iam_role" "app" {
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
 }
 
+resource "aws_iam_role_policy_attachment" "ssm_core" {
+  role       = aws_iam_role.app.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
+  role       = aws_iam_role.app.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 resource "aws_iam_role_policy" "ecr" {
   name = "ecr-pull"
   role = aws_iam_role.app.id
@@ -97,7 +87,7 @@ resource "aws_iam_role_policy" "ecr" {
   })
 }
 
-resource "aws_iam_role_policy" "ssm" {
+resource "aws_iam_role_policy" "ssm_params" {
   name = "ssm-read"
   role = aws_iam_role.app.id
   policy = jsonencode({
@@ -106,23 +96,6 @@ resource "aws_iam_role_policy" "ssm" {
       Effect   = "Allow"
       Action   = ["ssm:GetParameter", "ssm:GetParameters"]
       Resource = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.app_name}/*"
-    }]
-  })
-}
-resource "aws_iam_role_policy" "cloudwatch_logs" {
-  name = "cloudwatch-logs"
-  role = aws_iam_role.app.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogStreams"
-      ]
-      Resource = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/app/${var.app_name}*"
     }]
   })
 }
@@ -139,29 +112,26 @@ module "app_sg" {
   version = "5.2.0"
 
   name        = "${var.app_name}-sg"
-  description = "Allow HTTP, HTTPS, and SSH"
+  description = "Allow HTTP and HTTPS inbound; all outbound"
   vpc_id      = module.vpc.vpc_id
 
-  ingress_rules       = ["http-80-tcp", "https-443-tcp", "ssh-tcp"]
+  ingress_rules       = ["http-80-tcp", "https-443-tcp"]
   ingress_cidr_blocks = ["0.0.0.0/0"]
   egress_rules        = ["all-all"]
 }
 
-# --- EC2 Instances ---
+# --- EC2 Instance ---
 
 module "app_instance" {
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "5.7.1"
 
-  count = 2
-
-  name                        = "${var.app_name}-${count.index + 1}"
-  ami                         = data.aws_ami.ubuntu.id
+  name                        = var.app_name
+  ami                         = data.aws_ami.ecs_optimized.id
   instance_type               = "t2.micro"
-  key_name                    = aws_key_pair.app.key_name
   iam_instance_profile        = aws_iam_instance_profile.app.name
   vpc_security_group_ids      = [module.app_sg.security_group_id]
-  subnet_id                   = module.vpc.public_subnets[count.index]
+  subnet_id                   = module.vpc.public_subnets[0]
   associate_public_ip_address = true
 
   root_block_device = [{
@@ -170,9 +140,71 @@ module "app_instance" {
     encrypted             = true
     delete_on_termination = true
   }]
-
-  tags = {}
 }
+
+# --- CloudWatch Agent SSM Association ---
+
+resource "aws_ssm_association" "cloudwatch_agent" {
+  name = "AWS-ConfigureAWSPackage"
+
+  parameters = {
+    action = "Install"
+    name   = "AmazonCloudWatchAgent"
+  }
+
+  targets {
+    key    = "tag:Name"
+    values = [var.app_name]
+  }
+}
+
+resource "aws_ssm_association" "cloudwatch_agent_config" {
+  name = "AmazonCloudWatch-ManageAgent"
+
+  parameters = {
+    action                        = "configure"
+    optionalConfigurationSource   = "ssm"
+    optionalConfigurationLocation = aws_ssm_parameter.cloudwatch_agent_config.name
+    optionalRestart               = "yes"
+  }
+
+  targets {
+    key    = "tag:Name"
+    values = [var.app_name]
+  }
+
+  depends_on = [aws_ssm_association.cloudwatch_agent]
+}
+
+resource "aws_ssm_parameter" "cloudwatch_agent_config" {
+  name  = "/${var.app_name}/cloudwatch-agent-config"
+  type  = "String"
+  value = jsonencode({
+    logs = {
+      logs_collected = {
+        files = {
+          collect_list = [{
+            file_path        = "/var/lib/docker/containers/**/*-json.log"
+            log_group_name   = "/app/${var.app_name}"
+            log_stream_name  = "{instance_id}"
+            timestamp_format = "%Y-%m-%dT%H:%M:%S"
+          }]
+        }
+      }
+    }
+    metrics = {
+      metrics_collected = {
+        mem  = { measurement = ["mem_used_percent"] }
+        disk = { measurement = ["used_percent"], resources = ["/"] }
+      }
+      append_dimensions = {
+        InstanceId = "$${aws:InstanceId}"
+      }
+    }
+  })
+}
+
+# --- SSM Parameters (app secrets) ---
 
 resource "random_password" "secret_key_base" {
   length  = 128
@@ -215,8 +247,7 @@ resource "aws_cloudwatch_log_group" "app" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  count               = 2
-  alarm_name          = "${var.app_name}-${count.index + 1}-cpu-high"
+  alarm_name          = "${var.app_name}-cpu-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "CPUUtilization"
@@ -228,13 +259,12 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
-    InstanceId = module.app_instance[count.index].id
+    InstanceId = module.app_instance.id
   }
 }
 
 resource "aws_cloudwatch_metric_alarm" "status_check" {
-  count               = 2
-  alarm_name          = "${var.app_name}-${count.index + 1}-status-check"
+  alarm_name          = "${var.app_name}-status-check"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
   metric_name         = "StatusCheckFailed"
@@ -246,7 +276,7 @@ resource "aws_cloudwatch_metric_alarm" "status_check" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
-    InstanceId = module.app_instance[count.index].id
+    InstanceId = module.app_instance.id
   }
 }
 
@@ -270,8 +300,8 @@ resource "aws_ssm_parameter" "ecr_url" {
   value = aws_ecr_repository.app.repository_url
 }
 
-resource "aws_ssm_parameter" "instance_ips" {
+resource "aws_ssm_parameter" "instance_ip" {
   name  = "/${var.app_name}/deploy/INSTANCE_IPS"
   type  = "String"
-  value = join(",", module.app_instance[*].public_ip)
+  value = module.app_instance.public_ip
 }
