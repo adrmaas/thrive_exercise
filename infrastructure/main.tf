@@ -109,7 +109,6 @@ resource "aws_iam_role_policy" "ssm" {
     }]
   })
 }
-
 resource "aws_iam_role_policy" "cloudwatch_logs" {
   name = "cloudwatch-logs"
   role = aws_iam_role.app.id
@@ -261,4 +260,18 @@ resource "aws_sns_topic_subscription" "email" {
   topic_arn = aws_sns_topic.alerts.arn
   protocol  = "email"
   endpoint  = var.alert_email
+}
+
+# --- Deploy handoff (read by deploy workflow) ---
+
+resource "aws_ssm_parameter" "ecr_url" {
+  name  = "/${var.app_name}/deploy/ECR_URL"
+  type  = "String"
+  value = aws_ecr_repository.app.repository_url
+}
+
+resource "aws_ssm_parameter" "instance_ips" {
+  name  = "/${var.app_name}/deploy/INSTANCE_IPS"
+  type  = "String"
+  value = join(",", module.app_instance[*].public_ip)
 }
