@@ -67,9 +67,6 @@ jobs:
           SECRET_KEY_BASE: ${{ steps.config.outputs.secret_key_base }}
           USERNAME: ${{ steps.config.outputs.username }}
           PASSWORD: ${{ steps.config.outputs.password }}
-          SECRET_KEY_BASE: ${{ steps.config.outputs.secret_key_base }}
-          USERNAME: ${{ steps.config.outputs.username }}
-          PASSWORD: ${{ steps.config.outputs.password }}
         run: |
           aws ssm get-parameter --name /thrive-exercise/SSH_PRIVATE_KEY \
             --with-decryption --query Parameter.Value --output text \
