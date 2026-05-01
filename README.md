@@ -4,6 +4,47 @@ A Rails 8 web application deployed to AWS EC2 via Kamal, with infrastructure man
 
 ---
 
+## Quick Reference
+
+```console
+make help              # list all available commands
+make dev               # start local Rails server
+make test              # run tests
+make lint              # run RuboCop
+make scan              # run Brakeman + importmap security scans
+make ci                # run all CI checks locally (scan + lint + test)
+make build             # build Docker image locally
+make run               # run Docker image locally (no AWS required)
+make plan              # terraform plan
+make url               # print the deployed app URL
+make dashboard         # print the CloudWatch dashboard URL
+make cloudwatch-agent  # re-run CloudWatch Agent config (if mem/disk metrics missing)
+```
+
+---
+
+## Architecture
+
+The main constraint on the project is sticking with the AWS free tier resources.  This effectively eliminates all compute options except for EC2 and it's budgeting limits us to only allows for a single node in constant use.  It also eliminates all forms of load balancing and round-robin DNS if we're sticking to AWS resources.  For these reasons it was decided doing any kind of multi-instance deployment was deferred until either other free services could be brought in (for example Cloudflare) or the free tier limitation was lifted.  More time would have allowed for provisioning of a domain name which would have allowed for multiple nodes via round-robin without lifting the free restriction.
+
+The same restriction also weighs heavily on observability.  AWS managed Grafana would have been a great visibility tool but not in the free tier.  If more time was allowed Grafana Cloud offers a free tier and that could be integrated while holding to the free restriction.  Given that the following have been added for visibility: CloudWatch Metrics, Logs, Alarms, and a Dashboard.
+
+So the architecture is an EC2 instance using an Amazon Linux 2023 ECS-optimized AMI and Docker deployed via Kamal.
+
+![Architecture Diagram](./architecture-aws.dot.png)
+
+Effort has been made to follow AWS best practices with the regards to the IAM and EC2 deployment.  Kamal on the nodes uses IAM instance profile for required activities.  AWS Systems Manager (SSM) was added to improve security, close port 22, and remove the need for managing SSH keys. Unfortunately Kamal did not support keyless SSH so the SSH key management had to be kept regardless.  Deploy parameters like the instance ID are stored in SSM that are created and maintained by Terraform. A dedicated VPC with public and private subnets across 2 AZs replaces the default VPC. The private subnets are unused at this point but are available for RDS or ECS later.  A NAT gateway would have violated the free tier restriction.
+
+A separate GitHub Actions workflow has been added for Terraform.  `terraform plan` runs on PRs for changes to the `infrastructure/` folder.  `terraform apply` runs on merge when there are changes to the infrastructure folder.
+
+I would have liked to find a more performant build process for the Docker container.  And this might have been my next improvement as it was a bit of a bottleneck.  Optimizing this would have greatly improved the iteration speed.
+
+### Where Next?
+
+While usually I would favour incremental improvements on infrastructure and CI/CD most of the infrastructure here is not very useful.  If you _really needed_ to keep this up and running I would advise a DNS zone, multiple nodes, and an LB as the biggest fast improvements.
+
+Beyond that not a lot of this is reusable.  Moving to Fargate or EKS if the requirements make sense is the logical move.  That makes most of this work of little use moving forward.  Same with observability.  The current state is so strongly shaped by the restrictions that little should be kept of it.
+
 ## Developer Guide
 
 ### Prerequisites
@@ -31,8 +72,6 @@ docker build -t thrive-exercise:local -f app/Dockerfile app
 
 docker run \
   -e SECRET_KEY_BASE=$(openssl rand -hex 64) \
-  -e USERNAME=dev \
-  -e PASSWORD=dev \
   -p 3000:80 \
   thrive-exercise:local
 ```
@@ -63,7 +102,7 @@ Kamal can be run from your local machine as an alternative to triggering the Git
 **Prerequisites:**
 - AWS SSO authenticated (`aws sso login --profile admin`)
 - `AWS_PROFILE=admin` exported
-- SSH agent running with the deploy key loaded (see [Retrieving the SSH key](#retrieving-the-ssh-key))
+- Session Manager plugin installed (`brew install --cask session-manager-plugin`)
 
 **Deploy:**
 ```console

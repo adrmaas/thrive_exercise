@@ -3,6 +3,11 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.app.repository_url
 }
 
+output "dashboard_url" {
+  description = "CloudWatch dashboard URL"
+  value       = "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${var.app_name}"
+}
+
 output "app_url" {
   description = "URL of the deployed application"
   value       = "http://${module.app_instance.public_dns}"

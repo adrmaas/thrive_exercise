@@ -194,7 +194,6 @@ resource "aws_ssm_association" "cloudwatch_agent_config" {
 
   depends_on = [aws_ssm_association.cloudwatch_agent]
 }
-
 resource "aws_ssm_parameter" "cloudwatch_agent_config" {
   name  = "/${var.app_name}/cloudwatch-agent-config"
   type  = "String"
@@ -307,6 +306,158 @@ resource "aws_sns_topic" "alerts" {
 
 resource "aws_sns_topic_subscription" "email" {
   topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+# --- Health check alarm ---
+
+resource "aws_cloudwatch_metric_alarm" "health_check" {
+  alarm_name          = "${var.app_name}-health-check"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HealthCheckStatus"
+  namespace           = "AWS/Route53"
+  period              = 60
+  statistic           = "Minimum"
+  threshold           = 1
+  alarm_description   = "App health check /up is failing"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "breaching"
+
+  dimensions = {
+    HealthCheckId = aws_route53_health_check.app.id
+  }
+}
+
+resource "aws_route53_health_check" "app" {
+  fqdn              = module.app_instance.public_dns
+  port              = 80
+  type              = "HTTP"
+  resource_path     = "/up"
+  failure_threshold = 3
+  request_interval  = 30
+
+  tags = {
+    Name = "${var.app_name}-health-check"
+  }
+}
+
+# --- CloudWatch Dashboard ---
+
+resource "aws_cloudwatch_dashboard" "app" {
+  dashboard_name = var.app_name
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
+        properties = {
+          title   = "CPU Utilization"
+          region  = var.aws_region
+          metrics = [["AWS/EC2", "CPUUtilization", "InstanceId", module.app_instance.id]]
+          period  = 300
+          stat    = "Average"
+          view    = "timeSeries"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
+        properties = {
+          title   = "Memory Used %"
+          region  = var.aws_region
+          metrics = [["CWAgent", "mem_used_percent", "InstanceId", module.app_instance.id]]
+          period  = 300
+          stat    = "Average"
+          view    = "timeSeries"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          title   = "Disk Used %"
+          region  = var.aws_region
+          metrics = [["CWAgent", "disk_used_percent", "InstanceId", module.app_instance.id, "path", "/", "device", "xvda1", "fstype", "xfs"]]
+          period  = 300
+          stat    = "Average"
+          view    = "timeSeries"
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          title   = "EC2 Status Check"
+          region  = var.aws_region
+          metrics = [["AWS/EC2", "StatusCheckFailed", "InstanceId", module.app_instance.id]]
+          period  = 60
+          stat    = "Maximum"
+          view    = "timeSeries"
+        }
+      },
+      {
+        type   = "alarm"
+        x      = 0
+        y      = 12
+        width  = 24
+        height = 4
+        properties = {
+          title  = "Alarms"
+          alarms = [
+            aws_cloudwatch_metric_alarm.cpu_high.arn,
+            aws_cloudwatch_metric_alarm.status_check.arn,
+            aws_cloudwatch_metric_alarm.health_check.arn
+          ]
+        }
+      }
+    ]
+  })
+}
+
+# --- Billing Alarm (us-east-1 only — billing metrics are global) ---
+
+resource "aws_cloudwatch_metric_alarm" "billing" {
+  provider            = aws.us_east_1
+  alarm_name          = "${var.app_name}-billing"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "EstimatedCharges"
+  namespace           = "AWS/Billing"
+  period              = 86400
+  statistic           = "Maximum"
+  threshold           = 1
+  alarm_description   = "AWS estimated charges exceed $1 — free tier may be exceeded"
+  alarm_actions       = [aws_sns_topic.billing_alerts.arn]
+  treat_missing_data  = "notBreaching"
+
+  dimensions = {
+    Currency = "USD"
+  }
+}
+
+resource "aws_sns_topic" "billing_alerts" {
+  provider = aws.us_east_1
+  name     = "${var.app_name}-billing-alerts"
+}
+
+resource "aws_sns_topic_subscription" "billing_email" {
+  provider  = aws.us_east_1
+  topic_arn = aws_sns_topic.billing_alerts.arn
   protocol  = "email"
   endpoint  = var.alert_email
 }
