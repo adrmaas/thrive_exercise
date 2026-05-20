@@ -17,7 +17,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "thrive-exercise-tfstate-071919116017-us-west-2"
+    bucket         = "thrive-exercise-tfstate-B546D8A5-us-west-2"
     key            = "terraform.tfstate"
     region         = "us-west-2"
     encrypt        = true
